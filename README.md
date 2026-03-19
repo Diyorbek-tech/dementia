@@ -34,3 +34,4 @@ The user interface is available at `http://localhost:3000`.
 - **Multi-step Onboarding**: Streamlined collection of basic info, medical history, and clinical scores.
 - **Robust Validation**: `zod` schema parsing on the frontend + DRF serializers on the backend.
 - **Accessible UI**: Large inputs, high-contrast text, clear error states, and intuitive navigation.
+# dementia
