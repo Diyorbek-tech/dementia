@@ -1,0 +1,40 @@
+# Environment
+.env*
+*.env
+.venv
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Dependencies
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Artifacts
+brain/
+walkthrough.md
+implementation_plan.md
+task.md
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+
+# Local development
+db.sqlite3
+backend/db.sqlite3
+frontend/.next/
+frontend/node_modules/
+backend/venv/
+backend/__pycache__/
