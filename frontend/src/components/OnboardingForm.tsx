@@ -81,7 +81,7 @@ export default function OnboardingForm() {
       
       await api.post("/patients/", payload)
       
-      router.push(`/${locale}/profile`);
+      router.push(`/${locale}/diagnosis-result`);
     } catch (error: any) {
       console.error(error)
       setApiError(error.response?.data ? JSON.stringify(error.response.data) : "An error occurred submitting the form.")

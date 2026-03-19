@@ -23,3 +23,21 @@ class PatientViewSet(mixins.CreateModelMixin,
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+from rest_framework.decorators import api_view, permission_classes
+from .services import DiagnosisService
+from .serializers import DiagnosisReportSerializer
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def diagnose_patient(request):
+    try:
+        # Get the latest patient profile for the user
+        patient = Patient.objects.filter(user=request.user).latest('created_at')
+        report = DiagnosisService.get_diagnosis(patient)
+        serializer = DiagnosisReportSerializer(report)
+        return Response(serializer.data, status=201)
+    except Patient.DoesNotExist:
+        return Response({"error": "Profil topilmadi. Avval so'rovnomani to'ldiring."}, status=404)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)

@@ -44,4 +44,15 @@ class Patient(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Patient {self.id} - Age: {self.age}"
+        return f"{self.user.email} - {self.age} - {self.created_at}"
+
+class DiagnosisReport(models.Model):
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='diagnosis_reports')
+    risk_percentage = models.FloatField()
+    predicted_status = models.CharField(max_length=50) # Normal, MCI, AD
+    eeg_data_json = models.JSONField() # To store the sample EEG data for visualization
+    recommendations = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Report for {self.patient.user.email} - {self.predicted_status}"

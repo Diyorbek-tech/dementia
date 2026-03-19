@@ -48,31 +48,30 @@ export default function Home() {
             <div className="h-4 w-px bg-slate-200"></div>
             
             <div className="flex items-center gap-2">
-              {['uz', 'en', 'ru'].map((l) => (
-                <button
-                  key={l}
-                  onClick={() => handleLangChange(l)}
-                  className={`text-xs font-bold px-2 py-1 rounded-md transition-all ${
-                    locale === l 
-                      ? "bg-indigo-600 text-white" 
-                      : "text-slate-400 hover:text-indigo-600 hover:bg-slate-50"
-                  }`}
+              <div className="relative group">
+                <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={locale}
+                  onChange={(e) => handleLangChange(e.target.value)}
+                  className="appearance-none bg-slate-50 border border-slate-200 pl-9 pr-8 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 hover:border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer"
                 >
-                  {l.toUpperCase()}
-                </button>
-              ))}
+                  <option value="uz">UZBEK</option>
+                  <option value="en">ENGLISH</option>
+                  <option value="ru">RUSSIAN</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <ChevronRight className="w-3 h-3 rotate-90" />
+                </div>
+              </div>
             </div>
 
             {session ? (
               <div className="flex items-center gap-4 ml-4">
                 <Link href={`/${locale}/profile`}>
-                  <button className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-full text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-all">
-                    <LayoutDashboard className="w-4 h-4" /> Dashboard
+                  <button className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-full text-sm font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-100 transition-all">
+                    <UserIcon className="w-4 h-4" /> {session.user?.name || "Profil"}
                   </button>
                 </Link>
-                <button onClick={() => signOut()} className="text-sm font-medium text-red-500 hover:text-red-600">
-                  {t('logout')}
-                </button>
               </div>
             ) : (
               <button 
