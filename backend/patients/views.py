@@ -8,7 +8,7 @@ from dj_rest_auth.registration.views import SocialLoginView
 
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
-    callback_url = "http://localhost:3000/api/auth/callback/google"
+    callback_url = "http://localhost/api/auth/callback/google"
     client_class = OAuth2Client
 
 class PatientViewSet(mixins.CreateModelMixin,

@@ -1,24 +1,27 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
+// In Docker: uses internal network (backend:8000)
+// In dev:    uses localhost:8000
+const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || "http://localhost:8000";
+
 const handler = NextAuth({
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "GOOGLE_CLIENT_ID_PLACEHOLDER",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "GOOGLE_CLIENT_SECRET_PLACEHOLDER",
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
   pages: {
-    signIn: '/',
+    signIn: "/",
   },
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
         token.google_access_token = account.access_token;
-        
-        // Exchange Google token for Backend JWT
+
         try {
-          const response = await fetch("http://localhost:8000/api/auth/google/", {
+          const response = await fetch(`${BACKEND_URL}/api/auth/google/`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ access_token: account.access_token }),
