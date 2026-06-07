@@ -18,20 +18,58 @@ services:
     networks:
       - internal
 
-  # ── Django Backend ───────────────────────────────────────────────────────────
+  # ── Redis (Celery broker + result backend) ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - internal
+
+  # ── Django Backend (API) ─────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: dementia-backend:latest
     restart: unless-stopped
     env_file: .env
+    volumes:
+      # Uploaded media must be shared with the worker (it reads the files).
+      - media_data:/app/media
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - internal
     expose:
       - "8000"
+
+  # ── Celery Worker (multimodal analysis) ──────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: dementia-backend:latest
+    command: ["worker"]
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - media_data:/app/media          # same uploads as the API
+      - hf_cache:/app/.cache/huggingface  # persist the Whisper model
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - internal
 
   # ── Next.js Frontend ─────────────────────────────────────────────────────────
   frontend:
@@ -63,6 +101,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - media_data:/app/media:ro       # serve uploaded media directly if needed
     depends_on:
       - backend
       - frontend
@@ -71,6 +110,8 @@ services:
 
 volumes:
   postgres_data:
+  media_data:
+  hf_cache:
 
 networks:
   internal:

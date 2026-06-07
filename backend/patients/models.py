@@ -46,18 +46,70 @@ class Patient(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
         return f"{self.user.email if self.user else 'anonymous'} - {self.age} - {self.created_at}"
 
 
 class DiagnosisReport(models.Model):
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='diagnosis_reports')
-    risk_percentage = models.FloatField()
-    predicted_status = models.CharField(max_length=50)  # Normal, MCI, AD
-    eeg_data_json = models.JSONField()
-    recommendations = models.TextField()
+    """Multimodal cognitive-decline report for a single :class:`Patient` assessment.
+
+    One-to-one with the assessment. Per-modality analysis runs asynchronously in
+    a Celery worker, writing each modality's result + the fused outcome here, so
+    the frontend can poll ``analysis_status`` and render progressively.
+    """
+
+    # ── Predicted status values (kept stable for the frontend) ─────────────────
+    NORMAL = "Normal"
+    MCI = "MCI (Mild Cognitive Impairment)"
+    AD = "AD (Alzheimer's Disease)"
+    STATUS_CHOICES = [(NORMAL, NORMAL), (MCI, MCI), (AD, AD)]
+
+    # ── Async analysis lifecycle ───────────────────────────────────────────────
+    PENDING, PROCESSING, DONE, PARTIAL, FAILED = "pending", "processing", "done", "partial", "failed"
+    ANALYSIS_STATUS_CHOICES = [
+        (PENDING, "Pending"), (PROCESSING, "Processing"), (DONE, "Done"),
+        (PARTIAL, "Partial"), (FAILED, "Failed"),
+    ]
+
+    patient = models.OneToOneField(
+        Patient,
+        on_delete=models.CASCADE,
+        related_name='diagnosis_report',
+    )
+
+    analysis_status = models.CharField(
+        max_length=20, choices=ANALYSIS_STATUS_CHOICES, default=PENDING,
+    )
+    modalities_used = models.JSONField(default=list, blank=True)
+
+    # Per-modality results (filled in by the worker as each completes).
+    speech_result = models.JSONField(null=True, blank=True)
+    face_result = models.JSONField(null=True, blank=True)
+    eeg_result = models.JSONField(null=True, blank=True)
+    clinical_result = models.JSONField(null=True, blank=True)
+    fusion_result = models.JSONField(null=True, blank=True)
+
+    # Fused outcome (populated once fusion runs).
+    risk_percentage = models.FloatField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0.0), MaxValueValidator(100.0)],
+    )
+    predicted_status = models.CharField(max_length=50, choices=STATUS_CHOICES, blank=True)
+    confidence = models.FloatField(null=True, blank=True)
+    recommendations = models.TextField(blank=True)
+
+    # Real EEG waveform preview from the uploaded file (kept for back-compat name).
+    eeg_data_json = models.JSONField(default=list, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         user_email = self.patient.user.email if self.patient.user else 'anonymous'
-        return f"Report for {user_email} - {self.predicted_status}"
+        return f"Report for {user_email} - {self.predicted_status or self.analysis_status}"

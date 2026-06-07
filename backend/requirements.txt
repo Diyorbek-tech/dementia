@@ -1,3 +1,4 @@
+# ─── Web framework / API ────────────────────────────────────────────────────
 Django>=5.0,<7.0
 djangorestframework>=3.15
 dj-rest-auth[with_social]>=7.0
@@ -10,3 +11,31 @@ whitenoise>=6.8
 python-decouple>=3.8
 requests>=2.32
 cryptography
+
+# ─── Async task queue (modality analysis runs in a Celery worker) ─────────────
+celery>=5.4,<6.0
+redis>=5.0
+
+# ─── Scientific / ML core ─────────────────────────────────────────────────────
+# numpy pinned <2 for binary compatibility across librosa / mediapipe / opencv.
+numpy>=1.26,<2.0
+scipy>=1.13
+pandas>=2.2
+scikit-learn>=1.5
+joblib>=1.4
+
+# ─── Speech analysis (acoustic + ASR + linguistic) ────────────────────────────
+faster-whisper>=1.0          # CPU ASR (CTranslate2, no torch)
+librosa>=0.10.2              # acoustic features
+soundfile>=0.12              # audio I/O
+praat-parselmouth>=0.4.3     # jitter / shimmer / F0
+textstat>=0.7                # readability / linguistic metrics
+spacy>=3.7,<3.8              # syntactic complexity (model installed in Dockerfile)
+
+# ─── Face / video analysis ────────────────────────────────────────────────────
+mediapipe>=0.10.14           # face landmarks + blendshapes (AUs)
+opencv-python-headless>=4.9  # video frame decoding (headless = no GUI libs)
+
+# ─── EEG (optional EDF support; CSV is the primary path) ──────────────────────
+# mne is heavy and optional — EDF parsing degrades gracefully if absent.
+# mne>=1.6

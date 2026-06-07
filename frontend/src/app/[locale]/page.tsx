@@ -1,28 +1,44 @@
 "use client";
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Brain, 
-  ShieldCheck, 
-  Zap, 
-  ArrowRight, 
-  Globe, 
-  CheckCircle2, 
+import {
+  Brain,
+  ShieldCheck,
+  Zap,
+  ArrowRight,
+  Globe,
   Activity,
   ChevronRight,
   User as UserIcon,
-  LayoutDashboard
+  AlertTriangle
 } from 'lucide-react';
 
 export default function Home() {
   const t = useTranslations('Home');
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'uz';
+
+  // `loading` means next-auth is still resolving the cookie — don't flash a
+  // "log in" CTA only to swap it for the profile button a tick later.
+  const isAuthed = status === "authenticated" && !!session;
+  const isResolving = status === "loading";
+
+  // NextAuth redirects OAuth failures back here with `?error=…` (pages.error).
+  // Read it from the URL on the client to avoid forcing a Suspense boundary
+  // (which `useSearchParams()` would require at build time).
+  const [authError, setAuthError] = useState<string | null>(null);
+  useEffect(() => {
+    setAuthError(new URLSearchParams(window.location.search).get("error"));
+  }, []);
+
+  // After signing in, land the user straight on their dashboard.
+  const handleLogin = () => signIn("google", { callbackUrl: `/${locale}/profile` });
 
   const handleLangChange = (newLocale: string) => {
     const parts = pathname.split('/');
@@ -65,7 +81,9 @@ export default function Home() {
               </div>
             </div>
 
-            {session ? (
+            {isResolving ? (
+              <div className="ml-4 h-10 w-28 rounded-full bg-slate-100 animate-pulse" />
+            ) : isAuthed ? (
               <div className="flex items-center gap-4 ml-4">
                 <Link href={`/${locale}/profile`}>
                   <button className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-5 py-2.5 rounded-full text-sm font-bold text-indigo-700 hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-100 transition-all">
@@ -74,8 +92,8 @@ export default function Home() {
                 </Link>
               </div>
             ) : (
-              <button 
-                onClick={() => signIn('google')}
+              <button
+                onClick={handleLogin}
                 className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-slate-800 hover:shadow-lg transition-all flex items-center gap-2"
               >
                 {t('login_button')} <ArrowRight className="w-4 h-4" />
@@ -100,9 +118,18 @@ export default function Home() {
                 Dementia alomatlarini erta aniqlash va kognitiv salomatligingizni ilg'or texnologiyalar yordamida monitoring qiling.
               </p>
               
+              {authError && (
+                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-left">
+                  <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm font-medium text-red-700">
+                    Google orqali kirishda xatolik yuz berdi. Iltimos, qaytadan urinib ko&apos;ring.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                {session ? (
-                  <button 
+                {isAuthed ? (
+                  <button
                     onClick={() => router.push(`/${locale}/onboarding`)}
                     className="bg-indigo-600 text-white px-10 py-5 rounded-2xl text-lg font-bold hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-200 transition-all flex items-center justify-center gap-2 group"
                   >
@@ -110,9 +137,10 @@ export default function Home() {
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                   </button>
                 ) : (
-                  <button 
-                    onClick={() => signIn('google')}
-                    className="bg-slate-900 text-white px-10 py-5 rounded-2xl text-lg font-bold hover:bg-slate-800 hover:shadow-xl transition-all flex items-center justify-center gap-3"
+                  <button
+                    onClick={handleLogin}
+                    disabled={isResolving}
+                    className="bg-slate-900 text-white px-10 py-5 rounded-2xl text-lg font-bold hover:bg-slate-800 hover:shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-60"
                   >
                      <img src="https://authjs.dev/img/providers/google.svg" alt="Google" className="w-6 h-6" />
                      {t('login_button')}
@@ -205,17 +233,18 @@ export default function Home() {
              </h2>
              
              <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-10">
-               {session ? (
-                 <button 
+               {isAuthed ? (
+                 <button
                   onClick={() => router.push(`/${locale}/onboarding`)}
                   className="bg-white text-indigo-600 px-10 py-5 rounded-2xl text-lg font-bold hover:bg-slate-50 hover:shadow-2xl transition-all"
                  >
                    Hozir boshlash
                  </button>
                ) : (
-                 <button 
-                  onClick={() => signIn('google')}
-                  className="bg-white text-indigo-600 px-10 py-5 rounded-2xl text-lg font-bold hover:bg-slate-50 hover:shadow-2xl transition-all"
+                 <button
+                  onClick={handleLogin}
+                  disabled={isResolving}
+                  className="bg-white text-indigo-600 px-10 py-5 rounded-2xl text-lg font-bold hover:bg-slate-50 hover:shadow-2xl transition-all disabled:opacity-60"
                  >
                    Google orqali ro'yxatdan o'tish
                  </button>

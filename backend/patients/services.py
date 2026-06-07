@@ -1,85 +1,109 @@
-import json
-import os
-import random
+"""Async orchestration of the multimodal analysis.
+
+``run_full_analysis`` runs each available modality sequentially in the Celery
+worker, **persisting each result as it completes** (so the frontend's polling
+shows progressive per-modality progress), then fuses them. A single
+orchestrator (rather than a chord) keeps the DB writes race-free while giving
+the same progressive UX. A failed modality is recorded and excluded from
+fusion; the report ends ``done`` (all ok), ``partial`` (some failed) or
+``failed`` (none succeeded).
+"""
+import logging
+
+from .analysis import clinical, fusion
 from .models import DiagnosisReport
 
-class DiagnosisService:
-    @staticmethod
-    def get_diagnosis(patient):
-        """
-        Simulates an AI diagnosis based on patient data.
-        Maps age, medical markers, and clinical scores to a risk status.
-        """
-        # Load EEG samples for visualization
-        data_path = os.path.join(os.path.dirname(__file__), 'data/eeg_samples.json')
-        samples = []
-        if os.path.exists(data_path):
-            try:
-                with open(data_path, 'r') as f:
-                    samples = json.load(f)
-            except:
-                samples = []
+logger = logging.getLogger("patients")
 
-        # Simple Logic for Simulation: 
-        score = 0
-        if patient.age > 75: score += 40
-        elif patient.age > 65: score += 20
-        
-        if patient.hypertension: score += 15
-        if patient.diabetes: score += 15
-        if patient.history_of_stroke: score += 20
-        if patient.family_history_of_alzheimers: score += 25
-        if patient.depression: score += 10
-        
-        # clinical scores (MMSE is 0-30, lower is worse)
-        if patient.mmse_score:
-            if patient.mmse_score < 20: score += 40
-            elif patient.mmse_score < 24: score += 20
-            
-        risk_percentage = min(score + random.randint(-5, 5), 98)
-        risk_percentage = max(risk_percentage, 2)
-        
-        if risk_percentage > 70:
-            status = "AD (Alzheimer's Disease)"
-            target_status_code = 2
-        elif risk_percentage > 35:
-            status = "MCI (Mild Cognitive Impairment)"
-            target_status_code = 1
-        else:
-            status = "Normal"
-            target_status_code = 0
-            
-        # Select matching EEG data from samples (take 50 time points for the wave visualization)
-        eeg_sample = []
-        if samples:
-            # Filter samples by status (0, 1, 2)
-            # The dataset might use different codes, but assuming 0=Normal, 1=MCI, 2=AD for this simulation
-            filtered_samples = [s for s in samples if s.get('status') == target_status_code]
-            if not filtered_samples:
-                filtered_samples = samples
-            
-            # Select a random starting point and take 50 contiguous points if possible, or just random
-            # For visualization, we'll take 50 random samples and sort them to simulate a wave
-            eeg_sample = random.sample(filtered_samples, min(50, len(filtered_samples)))
-        
-        recommendations = DiagnosisService.get_recommendations(status)
-        
-        # Save to DB
-        report = DiagnosisReport.objects.create(
-            patient=patient,
-            risk_percentage=risk_percentage,
-            predicted_status=status,
-            eeg_data_json=eeg_sample,
-            recommendations=recommendations
-        )
-        
-        return report
 
-    @staticmethod
-    def get_recommendations(status):
-        if "AD" in status:
-            return "Zudlik bilan nevrolog ko'rigidan o'ting. Kundalik turmush tarzini nazorat qilish uchun parvarishlovchi bilan maslahatlashing."
-        elif "MCI" in status:
-            return "Kognitiv mashqlar (puzzle, mutolaa) bilan shug'ullaning. Sog'lom uyqu va parhezga amal qiling. 6 oydan so'ng qayta tekshiruvdan o'ting."
-        else:
-            return "Sizda kognitiv pasayish xavfi juda past. Sog'lom turmush tarzini davom ettiring va muntazam ravishda kognitiv testlarni topshirib turing."
+def create_pending_report(patient):
+    """Idempotently create the (pending) report for an assessment."""
+    report, _ = DiagnosisReport.objects.get_or_create(
+        patient=patient,
+        defaults={"analysis_status": DiagnosisReport.PENDING},
+    )
+    return report
+
+
+def _has_file(field):
+    return bool(field and getattr(field, "name", ""))
+
+
+def _run_modality(report, result_field, errors, key, fn):
+    """Run one modality, persist its result, return its risk (or None on failure)."""
+    try:
+        result = fn()
+        setattr(report, result_field, result)
+        report.save(update_fields=[result_field, "updated_at"])
+        return result.get("risk")
+    except Exception:
+        logger.exception("%s analysis failed for report %s", key, report.pk)
+        errors.append(key)
+        setattr(report, result_field, {"error": "analysis_failed", "modality": key})
+        report.save(update_fields=[result_field, "updated_at"])
+        return None
+
+
+def run_full_analysis(report_id):
+    """Analyze every available modality for a report, then fuse. Returns the report."""
+    report = DiagnosisReport.objects.select_related("patient").get(pk=report_id)
+    patient = report.patient
+
+    report.analysis_status = DiagnosisReport.PROCESSING
+    report.save(update_fields=["analysis_status", "updated_at"])
+
+    modality_risks = {}
+    errors = []
+
+    # ── Clinical (always available — pure questionnaire scorer) ────────────────
+    try:
+        clinical_result = clinical.score_clinical(patient)
+        report.clinical_result = clinical_result
+        report.save(update_fields=["clinical_result", "updated_at"])
+        modality_risks["clinical"] = clinical_result["risk"]
+    except Exception:
+        logger.exception("Clinical analysis failed for report %s", report.pk)
+        errors.append("clinical")
+
+    # ── EEG ────────────────────────────────────────────────────────────────────
+    if _has_file(patient.eeg_file):
+        def _eeg():
+            from .analysis import eeg
+            return eeg.analyze_eeg(patient.eeg_file.path)
+        modality_risks["eeg"] = _run_modality(report, "eeg_result", errors, "eeg", _eeg)
+
+    # ── Speech ───────────────────────────────────────────────────────────────
+    if _has_file(patient.voice_recording):
+        def _speech():
+            from .analysis import speech
+            return speech.analyze_speech(patient.voice_recording.path)
+        modality_risks["speech"] = _run_modality(report, "speech_result", errors, "speech", _speech)
+
+    # ── Face ─────────────────────────────────────────────────────────────────
+    if _has_file(patient.face_video):
+        def _face():
+            from .analysis import face
+            return face.analyze_face(patient.face_video.path)
+        modality_risks["face"] = _run_modality(report, "face_result", errors, "face", _face)
+
+    # ── Fusion ─────────────────────────────────────────────────────────────────
+    usable = {k: v for k, v in modality_risks.items() if v is not None}
+    fused = fusion.fuse(usable)
+    report.fusion_result = fused
+    report.risk_percentage = fused["overall_risk"]
+    report.predicted_status = fused["predicted_status"]
+    report.recommendations = fused["recommendations"]
+    report.confidence = fused["confidence"]
+    report.modalities_used = fused["modalities_used"]
+
+    if not usable:
+        report.analysis_status = DiagnosisReport.FAILED
+    elif errors:
+        report.analysis_status = DiagnosisReport.PARTIAL
+    else:
+        report.analysis_status = DiagnosisReport.DONE
+    report.save()
+
+    logger.info("Report %s analysis complete: status=%s modalities=%s",
+                report.pk, report.analysis_status, report.modalities_used)
+    return report

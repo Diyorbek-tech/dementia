@@ -21,18 +21,18 @@ export default function OnboardingPage() {
         </div>
         
         <div className="flex-1 space-y-3">
-          <NavItem icon={<Home className="w-5 h-5" />} label="Bosh sahifa" href={`/${locale}`} />
+          <NavItem icon={<Home className="w-5 h-5" />} label="Home" href={`/${locale}`} />
           <NavItem icon={<Activity className="w-5 h-5" />} label="Dashboard" href={`/${locale}/profile`} />
-          <NavItem icon={<PlusCircle className="w-5 h-5" />} label="Yangi test" href={`/${locale}/onboarding`} active />
+          <NavItem icon={<PlusCircle className="w-5 h-5" />} label="New assessment" href={`/${locale}/onboarding`} active />
         </div>
 
         <div className="mt-auto border-t border-slate-100 pt-6">
-          <button 
+          <button
             onClick={() => signOut()}
             className="flex items-center gap-3 w-full p-3.5 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group"
           >
             <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-semibold hidden lg:block">Chiqish</span>
+            <span className="font-semibold hidden lg:block">Sign out</span>
           </button>
         </div>
       </nav>
@@ -40,8 +40,8 @@ export default function OnboardingPage() {
       <main className="pl-20 lg:pl-72 min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-4xl animate-fade-in">
           <header className="mb-10 text-center">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Yangi So'rovnoma</h1>
-            <p className="text-slate-500 font-medium italic">Tibbiy ma'lumotlaringizni to'ldiring</p>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">New Assessment</h1>
+            <p className="text-slate-500 font-medium italic">Complete your multimodal cognitive screening</p>
           </header>
           <OnboardingForm />
         </div>
